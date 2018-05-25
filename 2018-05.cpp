@@ -230,8 +230,9 @@ int main(int argc, char* argv[]) {
               int64_t outcomes4[27 * 3];
               for (int d = 0; d < c; ++d) {
                 LOG_EVERY_N(INFO, 3000000)
-                    << "Trying #" << ::google::COUNTER << " combination at "
-                    << ca << " " << b << " " << c;
+                    << "Trying #" << ::google::COUNTER << " combination at ("
+                    << ca << " " << b << " " << c << ") with " << solutions
+                    << " solutions so far.";
                 if (goodStep(outcomes3, 27, configs[d].sets, 1, outcomes4)) {
                   std::vector<int> solution;
                   for (auto x : {a, b, c, d}) {
