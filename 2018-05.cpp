@@ -48,6 +48,7 @@ using Map = std::map<int, std::vector<int64_t>>;
 
 struct Config {
   int conf;
+  int cnt;
   int64_t sets[3];
 };
 
@@ -100,6 +101,7 @@ std::vector<Config> genAllConfigs() {
         ) {
           configs.push_back({
             (b << N) ^ a,
+            __builtin_popcountl(b) * 2,
             {
               outcomes[0],
               outcomes[1],
@@ -114,7 +116,7 @@ std::vector<Config> genAllConfigs() {
   }
   LOG(INFO) << "Filtered " << filtered << " configs.";
   std::sort(configs.begin(), configs.end(), [](const auto& a, const auto& b) {
-    return a.conf < b.conf;
+    return a.cnt < b.cnt;
   });
   return configs;
 }
@@ -204,47 +206,55 @@ int main(int argc, char* argv[]) {
   CHECK_EQ(__builtin_popcountll((int64_t(1) << 54) + 1), 2);
   const auto& configs = genAllConfigs();
   LOG(INFO) << "There are " << configs.size() << " configs.";
-  explainConfig(configs[0]);
-  explainConfig(configs[10000]);
+  // explainConfig(configs[0]);
+  // explainConfig(configs[10000]);
 
-  int possibleCombines = 0;
   std::set<int> seen;
-  int solutions = 0;
-  for (int a = 0; a < configs.size(); ++a) {
-    int ca = __builtin_popcountl(configs[a].conf);
-    if (seen.count(ca)) {
-      continue;
-    }
-    seen.insert(ca);
-    for (int b = 0; b < configs.size(); ++b) {
-      int64_t outcomes2[9];
-      if (goodStep(configs[a].sets, 3, configs[b].sets, 9, outcomes2)) {
-        int64_t outcomes3[27];
-        for (int c = 0; c < b; ++c) {
-          if (goodStep(outcomes2, 9, configs[c].sets, 3, outcomes3)) {
-            ++possibleCombines;
-            LOG_EVERY_N(INFO, 1000) << "Tried " << possibleCombines << " combinations at " << ca << " " << b << " " << c;
-            int64_t outcomes4[27 * 3];
-            for (int d = 0; d < c; ++d) {
-              if (goodStep(outcomes3, 27, configs[d].sets, 1, outcomes4)) {
-                std::cout << "Got one solution: " << std::endl;
-                std::vector<int> solution;
-                for (auto x : {a, b, c, d}) {
-                  std::cout << weighOne(configs[x].conf) << std::endl;
-                  solution.push_back(configs[x].conf);
+  std::atomic<int> solutions{0};
+  auto tryWithFirstCount = [&](std::set<int> firstCount) {
+    for (int a = 0; a < configs.size(); ++a) {
+      int ca = __builtin_popcountl(configs[a].conf);
+      if (firstCount.count(ca) == 0) {
+        continue;
+      }
+      firstCount.erase(ca);
+      for (int b = 0; b < configs.size(); ++b) {
+        if (configs[b].cnt > ca) {
+          continue;
+        }
+        int64_t outcomes2[9];
+        if (goodStep(configs[a].sets, 3, configs[b].sets, 9, outcomes2)) {
+          int64_t outcomes3[27];
+          for (int c = 0; c < b; ++c) {
+            if (goodStep(outcomes2, 9, configs[c].sets, 3, outcomes3)) {
+              int64_t outcomes4[27 * 3];
+              for (int d = 0; d < c; ++d) {
+                LOG_EVERY_N(INFO, 3000000)
+                    << "Trying #" << ::google::COUNTER << " combination at "
+                    << ca << " " << b << " " << c;
+                if (goodStep(outcomes3, 27, configs[d].sets, 1, outcomes4)) {
+                  std::vector<int> solution;
+                  for (auto x : {a, b, c, d}) {
+                    solution.push_back(configs[x].conf);
+                  }
+                  CHECK(verify(solution));
+                  ++solutions;
+                  LOG_FIRST_N(INFO, 10)
+                      << "Found one solution: " << weighOne(configs[a].conf)
+                      << " " << weighOne(configs[b].conf) << " "
+                      << weighOne(configs[c].conf) << " "
+                      << weighOne(configs[d].conf);
                 }
-                for (int i = 0; i < 27 * 3; ++i) {
-                  printOutcome(outcomes4[i]);
-                  std::cout << std::endl;
-                }
-                CHECK(verify(solution));
-                ++solutions;
               }
             }
           }
         }
       }
     }
+  };
+  #pragma omp parallel for
+  for (int ca = 2; ca <= 10; ca += 2) {
+    tryWithFirstCount({ca});
   }
   LOG(INFO) << "Found " << solutions << " solutions.";
   return 0;
