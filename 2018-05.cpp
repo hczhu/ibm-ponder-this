@@ -44,8 +44,6 @@ constexpr int C = N * (N - 1) / 2;
 constexpr auto Mask = (1<<N)  - 1;
 std::pair<int, int> Table[C];
 
-using Map = std::map<int, std::vector<int64_t>>;
-
 struct Config {
   int conf;
   int cnt;
@@ -84,7 +82,11 @@ std::vector<Config> genAllConfigs() {
   std::vector<Config> configs;
   int filtered = 0;
   for (int a = Mask; a > 0; a = (a - 1) & Mask) {
-    for (int b = a; b > 0; b = (b - 1) & Mask) {
+    const auto ca = __builtin_popcountl(a);
+    if (ca > N / 2) {
+      continue;
+    }
+    for (int b = a ^ Mask; b > 0; b = (b - 1) & (Mask ^ a)) {
       if (((a & b) == 0) && __builtin_popcountl(a) == __builtin_popcountl(b)) {
         int64_t outcomes[3] = {
           feasibleSetLess(b, a),
